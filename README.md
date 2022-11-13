@@ -48,7 +48,7 @@ spec:
 ![img.png](pictures/ErrorDeployingFromOperator.png)
 
 
-## Installing Jfrog-artifactory using helm chart:
+## Installing JFrog-artifactory using helm chart:
 
 Note: a License is Pre-requisite to the installation, as it needed for activating an instance on openshift, we'll use a free trial 30 days evaluation license
 Which can be obtained from [here with short registration](https://jfrog.com/start-free/#hosted)
