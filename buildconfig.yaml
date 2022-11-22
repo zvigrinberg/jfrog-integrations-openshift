@@ -1,0 +1,47 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  annotations:
+    openshift.io/generated-by: OpenShiftNewApp
+  labels:
+    app: aop-aspects-and-interceptors
+    app.kubernetes.io/component: aop-aspects-and-interceptors
+    app.kubernetes.io/instance: aop-aspects-and-interceptors
+  name: aop-aspects-and-interceptors
+  namespace: jfrog-integrations
+spec:
+  failedBuildsHistoryLimit: 5
+  output:
+    to:
+      kind: DockerImage
+      name: artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest
+  postCommit: {}
+  resources: {}
+  runPolicy: Serial
+  source:
+    contextDir: spring-aop-example
+    git:
+      uri: https://github.com/zvigrinberg/aop-aspects-and-interceptors.git
+    type: Git
+  strategy:
+    sourceStrategy:
+      env:
+      - name: MAVEN_ARGS
+        value: -e -Pdefault -DskipTests -Dcom.redhat.xpaas.repo.redhatga package -Djava.version=11
+      - name: MAVEN_MIRROR_URL
+        value: http://artifactory-ha-artifactory-ha-primary:8082/artifactory/artifacts-all
+      from:
+        kind: ImageStreamTag
+        name: openjdk-11:latest
+    type: Source
+  successfulBuildsHistoryLimit: 5
+  triggers:
+  - github:
+      secret: ytaCv9LmSmkmddmm7eKR
+    type: GitHub
+  - generic:
+      secret: u6LkInboTb8h8rs1gxTT
+    type: Generic
+  - type: ConfigChange
+  - imageChange: {}
+    type: ImageChange
