@@ -116,3 +116,100 @@ artifactory-ha-postgresql-0               1/1     Running   0                144
 oc scale statefulsets.apps artifactory-ha-artifactory-ha-member --replicas=0
 oc scale deployment artifactory-ha-nginx --replicas=0
 ```
+
+**Note: X-RAY is out of scope for the tests as it requires PRO license of artifactory for activation in Artifactory's WEB UI.**
+
+## Testing Artifactory Integration with Openshift BuildConfig.
+
+### Pre-requisites:
+- Create in Artifactory Virtual Maven Repository, to act as a proxy for maven central, and reduce downloading time for artifacts after first retrieval, define in artifactory that anonymous access is enabled.
+- Create a Docker repository in Artifactory, For holding the images
+- We'll use an existing demo spring boot application( [repo here](https://github.com/zvigrinberg/aop-aspects-and-interceptors)) with `Source` strategy.
+- Assuming that we're working on `jfrog-integrations` namespace.
+
+### Procedure:
+
+1. Create the Application in openshift using S2I(Source 2 Image)
+- Pass environment variable MAVEN_MIRROR_URL to Builder with address of virtual maven repository created in artifactory.
+- Pass Environment Variable MAVEN_ARGS to override maven args(such as profile and java compiler version 11 to build with)
+- Use the appropriate builder image for java containing JDK 11.
+- Since there are 2 projects in the above repo , pass context-dir=spring-aop-example. 
+```shell
+oc new-app  registry.redhat.io/ubi8/openjdk-11~https://github.com/zvigrinberg/aop-aspects-and-interceptors.git  --context-dir=spring-aop-example --build-env="MAVEN_ARGS=-e -Pdefault -DskipTests -Dcom.redhat.xpaas.repo.redhatga package -Djava.version=11" --build-env="MAVEN_MIRROR_URL=http://artifactory-ha-artifactory-ha-primary:8082/artifactory/artifacts-all"
+```
+2. Wait for build to be finished, and then see that the application is up:
+```shell
+oc logs aop-aspects-and-interceptors-1-build -f
+oc get pods -w
+```
+3. Expose the application as route
+```shell
+oc expose svc/aop-aspects-and-interceptors
+```
+4. After application is up and running, test it's working:
+```shell
+oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i xdg-open http://{}/hello
+```
+
+6. Patch the buildconfig with output of a external docker image, of artifactory repository via route.
+```shell
+ cat > buildconfig-patch.yaml << EOF
+spec:
+  output:
+    to:
+      kind: DockerImage
+      name: artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest
+EOF
+
+oc patch bc/aop-aspects-and-interceptors  --patch-file buildconfig-patch.yaml
+```
+
+6. Create image Pull secret for docker repository in artifactory(using credentials of an authorized user in artifactory):
+```shell
+oc create secret docker-registry artifactory-docker-ps --docker-server=artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com    --docker-username=admin    --docker-password=password
+```
+7. Link the image pull secret to both service accounts of namespace, builder and default:
+```shell
+oc secrets link default artifactory-docker-ps --for=pull
+oc secrets link builder artifactory-docker-ps --for=mount
+```
+
+8. Add Artifactory' Docker repository to be allowed as insecure registry in the cluster, in order to bypass tls verification(artifactory in trial version doesn't support https): 
+```shell
+cat > cluster-image.yaml << EOF
+spec:
+  registrySources:
+    allowedRegistries:
+    - quay.io
+    - registry.redhat.io
+    - image-registry.openshift-image-registry.svc:5000
+    - docker.io
+    - gcr.io
+    - acr.io
+    - finiqapp.azurecr.io
+    - artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
+    insecureRegistries:
+    - artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
+EOF
+
+oc patch image.config.openshift.io/cluster --patch-file cluster-image.yaml
+
+```
+9. Watch the build progress, and wait for application to be up and running.
+```shell
+oc logs aop-aspects-and-interceptors-2-build -f
+oc get pods -w
+```
+
+10. After application is up and running, test it:
+```shell
+oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i xdg-open http://{}/hello
+```
+
+11. In Artifactory UI, kindly Check that the application image pushed to artifactory' docker repository `docker-quickstart-local` 
+
+**_Note: At the end, when finishing with all tests, kindly restore  image.config.openshift.io/cluster to original state:_**
+```shell
+oc patch image.config.openshift.io/cluster --type merge -p 'spec: {}'
+
+```

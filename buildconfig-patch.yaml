@@ -1,0 +1,5 @@
+spec:
+  output:
+    to:
+      kind: DockerImage
+      name: artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest

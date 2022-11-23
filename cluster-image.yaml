@@ -1,0 +1,9 @@
+spec:
+  registrySources:
+    allowedRegistries:
+    - quay.io
+    - registry.redhat.io
+    - image-registry.openshift-image-registry.svc:5000
+    - docker.io
+    insecureRegistries:
+    - artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
