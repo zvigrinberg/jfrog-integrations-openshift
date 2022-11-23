@@ -186,6 +186,7 @@ spec:
     - docker.io
     - gcr.io
     - acr.io
+    - registry.access.redhat.com
     - finiqapp.azurecr.io
     - artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
     insecureRegistries:
