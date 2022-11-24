@@ -226,6 +226,7 @@ oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i
 ```
 
 14. In Artifactory UI, kindly Check that the application image pushed to artifactory' docker repository `docker-quickstart-local` 
+![image](https://user-images.githubusercontent.com/75700623/203808343-12c4f2e6-8f3d-41de-86e1-406f47feeaec.png)
 
 **_Note: At the end, when finishing with all tests, kindly restore  image.config.openshift.io/cluster to original state:_**
 ```shell
