@@ -1,0 +1,14 @@
+      initContainers:
+      - name: reset-admin
+        command:
+          - bash
+          - -c
+          - chown artifactory:artifactory /opt/jfrog/artifactory/var/etc/access/bootstrap.creds ; chmod 600 /opt/jfrog/artifactory/var/etc/access/bootstrap.creds
+        image: releases-docker.jfrog.io/ubi8/ubi-minimal:8.6-902
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+          - mountPath: /opt/jfrog/artifactory/var/etc/access
+            name: bootstrap-creds
+            subPath: bootstrap.creds

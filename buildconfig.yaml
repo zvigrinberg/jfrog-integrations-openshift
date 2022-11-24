@@ -13,7 +13,7 @@ spec:
   failedBuildsHistoryLimit: 5
   output:
     to:
-      kind: DockerImage
+      kind:
       name: artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest
   postCommit: {}
   resources: {}

@@ -135,7 +135,7 @@ oc scale deployment artifactory-ha-nginx --replicas=0
 - Use the appropriate builder image for java containing JDK 11.
 - Since there are 2 projects in the above repo , pass context-dir=spring-aop-example. 
 ```shell
-oc new-app  registry.redhat.io/ubi8/openjdk-11~https://github.com/zvigrinberg/aop-aspects-and-interceptors.git  --context-dir=spring-aop-example --build-env="MAVEN_ARGS=-e -Pdefault -DskipTests -Dcom.redhat.xpaas.repo.redhatga package -Djava.version=11" --build-env="MAVEN_MIRROR_URL=http://artifactory-ha-artifactory-ha-primary:8082/artifactory/artifacts-all"
+oc new-app  registry.redhat.io/ubi8/openjdk-11~https://github.com/zvigrinberg/aop-aspects-and-interceptors.git  --context-dir=spring-aop-example --build-env="MAVEN_ARGS=-e -Pdefault -DskipTests -Dcom.redhat.xpaas.repo.redhatga package -Djava.version=11" --build-env="MAVEN_MIRROR_URL=http://artifactory-ha:8082/artifactory/maven-all"
 ```
 2. Wait for build to be finished, and then see that the application is up:
 ```shell
@@ -158,20 +158,23 @@ spec:
   output:
     to:
       kind: DockerImage
-      name: artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest
+      name: arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest
 EOF
 
 oc patch bc/aop-aspects-and-interceptors  --patch-file buildconfig-patch.yaml
 ```
 
+
+
 6. Create image Pull secret for docker repository in artifactory(using credentials of an authorized user in artifactory):
 ```shell
-oc create secret docker-registry artifactory-docker-ps --docker-server=artifactory-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com    --docker-username=admin    --docker-password=password
+oc create secret docker-registry artifactory-docker-ps --docker-server=arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com    --docker-username=admin    --docker-password=password
 ```
 7. Link the image pull secret to both service accounts of namespace, builder and default:
 ```shell
 oc secrets link default artifactory-docker-ps --for=pull
 oc secrets link builder artifactory-docker-ps --for=mount
+oc secrets link builder artifactory-docker-ps --for=pull
 ```
 
 8. Add Artifactory' Docker repository to be allowed as insecure registry in the cluster, in order to bypass tls verification(artifactory in trial version doesn't support https): 
@@ -196,18 +199,33 @@ EOF
 oc patch image.config.openshift.io/cluster --patch-file cluster-image.yaml
 
 ```
-9. Watch the build progress, and wait for application to be up and running.
+9. Start a new build
+```shell
+oc start-build aop-aspects-and-interceptors
+```
+10. Watch the build progress, and wait for application to be up and running.
 ```shell
 oc logs aop-aspects-and-interceptors-2-build -f
 oc get pods -w
 ```
+11. Once finished, you can tag a new ImageStreamTag to Start a new deployment 
+```shell
+oc tag --source=docker arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest aop-aspects-and-interceptors:latest --scheduled
+````
 
-10. After application is up and running, test it:
+12. Check that the deployment config rolled out a new  deployment and a new pod was created, check that the image is from artifactory repository:
+```shell
+oc get pods -w
+## Ctrl+c/z when above up and running
+oc get pods | grep aop-aspects-and-interceptors | grep -v -E 'deploy|build'  | sort --reverse | awk '{print $1}' | xargs -i oc get pod {} -o=jsonpath="{..image}" | tr ' ' '\n'
+
+```
+13. After application is up and running, test it:
 ```shell
 oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i xdg-open http://{}/hello
 ```
 
-11. In Artifactory UI, kindly Check that the application image pushed to artifactory' docker repository `docker-quickstart-local` 
+14. In Artifactory UI, kindly Check that the application image pushed to artifactory' docker repository `docker-quickstart-local` 
 
 **_Note: At the end, when finishing with all tests, kindly restore  image.config.openshift.io/cluster to original state:_**
 ```shell
