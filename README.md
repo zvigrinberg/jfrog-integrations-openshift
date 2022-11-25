@@ -119,10 +119,10 @@ oc scale deployment artifactory-ha-nginx --replicas=0
 
 **Note: X-RAY is out of scope for the tests as it requires PRO license of artifactory for activation in Artifactory's WEB UI.**
 
-## Testing Artifactory Integration with Openshift BuildConfig.
+## Testing Artifactory Integration with Openshift' BuildConfig, DeploymentConfig, ImageStream(Tags) And Route. 
 
 ### Pre-requisites:
-- Create in Artifactory Virtual Maven Repository, to act as a proxy for maven central, and reduce downloading time for artifacts after first retrieval, define in artifactory that anonymous access is enabled.
+- Create in Artifactory Virtual Maven Repository, to act as a proxy for maven central, and reduce downloading time for artifacts after first retrieval, define in artifactory' settings that anonymous access is enabled.
 - Create a Docker repository in Artifactory, For holding the images
 - We'll use an existing demo spring boot application( [repo here](https://github.com/zvigrinberg/aop-aspects-and-interceptors)) with `Source` strategy.
 - Assuming that we're working on `jfrog-integrations` namespace.
@@ -176,8 +176,9 @@ oc secrets link default artifactory-docker-ps --for=pull
 oc secrets link builder artifactory-docker-ps --for=mount
 oc secrets link builder artifactory-docker-ps --for=pull
 ```
-
-8. Add Artifactory' Docker repository to be allowed as insecure registry in the cluster, in order to bypass tls verification(artifactory in trial version doesn't support https): 
+8. Now There are two options for interacting with Artifactory, Secured with TLS, and insecure. 
+#### Configure Artifactory's Docker Repository as an insecure Registry
+- Add Artifactory' Docker repository to be allowed as insecure registry in the cluster, in order to bypass tls verification(artifactory in trial version doesn't support https): 
 ```shell
 cat > cluster-image.yaml << EOF
 spec:
@@ -197,7 +198,77 @@ spec:
 EOF
 
 oc patch image.config.openshift.io/cluster --patch-file cluster-image.yaml
+```
 
+#### Configure Artifactory's Docker Repository as a secured Registry
+ 
+ I Will choose this option, as it's more secured and not affecting custom external registries. \
+ Will Create A Self Signed Certificate Using our own Certificate Authority, and Install it on an Openshift' Edge Route:
+- Create a Certificate Authority
+```shell
+openssl req -x509 -sha256 -days 356  -nodes -newkey rsa:2048 -subj "/CN=arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/C=IL/L=Tel Aviv" -keyout rootCA.key -out rootCA.crt
+```
+- Create A Private key
+```shell
+openssl genrsa -out server.key 2048
+```
+- Create A Configuration file for a Certificate Signing Request(CSR)
+```shell
+cat > csr.conf <<EOF
+   [ req ]
+   default_bits = 2048
+   prompt = no
+   default_md = sha256
+   req_extensions = req_ext
+   distinguished_name = dn
+   
+   [ dn ]
+   C = IL
+   ST = Israel
+   L = Tel Aviv
+   O = Redhat
+   OU = EcoSystem Engineering
+   CN = arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
+   
+   [ req_ext ]
+   subjectAltName = @alt_names
+   
+   [ alt_names ]
+   DNS.1 = arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
+   
+EOF   
+```
+- Create the CSR File using the private key created earlier and the csr.conf file: 
+```shell
+openssl req -new -key server.key -out server.csr -config csr.conf
+```
+- Create Configuration file that will be used to sign and create the certificate
+```shell
+cat > cert.conf <<EOF
+   authorityKeyIdentifier=keyid,issuer
+   basicConstraints=CA:FALSE
+   keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+   subjectAltName = @alt_names
+   
+   [alt_names]
+   DNS.1 = arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
+EOF
+```
+- Create the Certificate, Using the CA, CSR file and configuration file cert.conf:
+```shell
+openssl x509 -req     -in server.csr     -CA rootCA.crt -CAkey rootCA.key     -CAcreateserial -out server.crt     -days 365     -sha256 -extfile cert.conf
+```
+- Now Create an Openshift Route With a TLS Edge Termination:
+```shell
+oc create route edge   --service=artifactory-ha --cert=server.cert --key=server.key --ca-cert=rootCA.cert  --hostname=arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com
+```
+
+- Install The CA(Certificate Authority) As a Trusted CA in The Cluster, So Openshift Will be able to push and pull Images to and from Artifactory Registry in a secured way:
+```shell
+# Create ConfigMap with the CA
+oc create configmap registry-cas -n openshift-config --from-file=arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com=rootCA.cert
+# Define CA as a trusted one by openshift cluster.  
+oc patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"registry-cas"}}}' --type=merge
 ```
 9. Start a new build
 ```shell
@@ -208,8 +279,9 @@ oc start-build aop-aspects-and-interceptors
 oc logs aop-aspects-and-interceptors-2-build -f
 oc get pods -w
 ```
-11. Once finished, you can tag a new ImageStreamTag to Start a new deployment 
+11. Once finished, you can enable image change trigger (if not already enabled) and tag a new ImageStreamTag using the newly pushed docker image (to Artifactory' docker repo) in order to Start a new deployment 
 ```shell
+oc set triggers dc/aop-aspects-and-interceptors --from-image=jfrog-integrations/aop-aspects-and-interceptors:latest -c aop-aspects-and-interceptors
 oc tag --source=docker arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors:latest aop-aspects-and-interceptors:latest --scheduled
 ````
 
@@ -231,5 +303,10 @@ oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i
 **_Note: At the end, when finishing with all tests, kindly restore  image.config.openshift.io/cluster to original state:_**
 ```shell
 oc patch image.config.openshift.io/cluster --type merge -p 'spec: {}'
+```
 
+15. When finished, Release all resources by uninstalling the Chart, and deleting the namespace
+```shell
+helm uninstall artifactory-ha -n jfrog-integrations
+oc delete project jfrog-integrations
 ```
