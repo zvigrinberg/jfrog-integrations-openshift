@@ -300,6 +300,13 @@ oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i
 14. In Artifactory UI, kindly Check that the application image pushed to artifactory' docker repository `docker-quickstart-local` 
 ![image](https://user-images.githubusercontent.com/75700623/203808343-12c4f2e6-8f3d-41de-86e1-406f47feeaec.png)
 
+### Integrate Artifactory With Openshift Pipelines(Tekton CI/CD Pipelines)
+- First, Delete all resources created by oc new-app/buildConfig:
+```shell
+oc delete all -l app=aop-aspects-and-interceptors
+```
+- We will create a pipeline, Using Openshift Pipelines(Tekton) , And will use Helm in it to deploy the sample application to Cluster.
+
 **_Note: At the end, when finishing with all tests, kindly restore  image.config.openshift.io/cluster to original state:_**
 ```shell
 oc patch image.config.openshift.io/cluster --type merge -p 'spec: {}'
