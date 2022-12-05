@@ -307,6 +307,63 @@ oc delete all -l app=aop-aspects-and-interceptors
 ```
 - We will create a pipeline, Using Openshift Pipelines(Tekton) , And will use Helm in it to deploy the sample application to Cluster.
 
+- The pipeline will contain 4 tasks:
+ 1. `git` clone and checkout the application repo into workspace.
+ 2. Build the sources using `maven` and produce a binary jar(use a pvc and artifactory virtual maven repository to enhance performance)
+ 3. build image using Containerfile and the Jar from former step and push it to docker registry in artifactory instance, doing it using `Buildah`
+ 4. deploy the image from artifactory' docker registry using `openshift client` task using `new-app` command.
+
+#### Prerequisites
+
+- If Tekton pipelines not installed on openshift cluster, kindly install it [here](https://docs.openshift.com/container-platform/4.9/cicd/pipelines/installing-pipelines.html#op-installing-pipelines-operator-in-web-console_installing-pipelines), use this link also to install tekton cli(tkn) if you don't have it.
+
+#### Procedure
+
+1. Install all Openshift Pipelines/tekton tasks defined in the following directory(if not already exists in cluster):
+```shell
+oc apply -f tekton-pipeline/tasks
+```
+2. Create a PersistentVolumeClaim for holding the storage workspace of pipeline to be shared between all pipeline's tasks, and wait until the status is `Bound`
+```shell
+oc apply -f tekton-pipeline/workspace-pvc.yaml
+oc get pvc tekton-volume -w
+```
+3. Create a secret with credentials to authenticate to docker registry in artifactory, replace user:password with your real credentials: 
+```shell
+export USER_PASS_BASE64=$( echo  "user:password" | base64 )
+sed -i 's/base64(username:password)/'$USER_PASS_BASE64'/g' tekton-pipeline/dockerconfig-secret.yaml
+oc apply -f tekton-pipeline/dockerconfig-secret.yaml
+```
+
+4. Create The Pipeline using all tasks and resources
+```shell
+oc apply -f tekton-pipeline/pipeline.yaml
+```
+
+5. Create a PipelineRun in order to invoke first build of pipeline
+```shell
+oc apply -f tekton-pipeline/pipeline-run.yaml
+```
+
+6. In order to track the pipeline build logs, kindly run the following command:
+```shell
+tkn pipelineruns logs $(oc get pipelinerun | grep -v NAME | awk '{print $1}') -f
+```
+
+7. When Finished, Checks that the application is up and running
+```shell
+oc get pods -w | grep aop-aqspects-and-interceptors 
+aop-aqspects-and-interceptors-6b5d6b9989-c7gbh                    1/1     Running     0              112m
+```
+
+8. Make sure that the image of pod derived from docker registry of artifactory:
+```shell
+oc get pod aop-aqspects-and-interceptors-6b5d6b9989-c7gbh -o=jsonpath="{..image}" | tr ' ' '\n' ; echo
+arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors@sha256:6792aa0d931f32d4ef0c56b35a17546a592e877af59f34c36228cd1165fbe3c7
+arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors@sha256:6792aa0d931f32d4ef0c56b35a17546a592e877af59f34c36228cd1165fbe3c7
+[zgrinber@zgrinber jfrog-integrations-openshift]$ 
+```
+
 **_Note: At the end, when finishing with all tests, kindly restore  image.config.openshift.io/cluster to original state:_**
 ```shell
 oc patch image.config.openshift.io/cluster --type merge -p 'spec: {}'

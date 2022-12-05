@@ -1,0 +1,108 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: build-application-artifactory
+  namespace: jfrog-integrations
+spec:
+  finally:
+  - name: openshift-client
+    params:
+    - name: SCRIPT
+      value: oc new-app --image $(params.REPO_IMAGE):$(params.BUILD_NUMBER)
+    - name: VERSION
+      value: latest
+    taskRef:
+      kind: ClusterTask
+      name: openshift-client
+  params:
+  - default: "1"
+    name: BUILD_NUMBER
+    type: string
+  - default: arti-jfrog-integrations.apps.ocp-dev01.lab.eng.tlv2.redhat.com/docker-quickstart-local/aop-aqspects-and-interceptors
+    name: REPO_IMAGE
+    type: string
+  tasks:
+  - name: git-clone
+    params:
+    - name: url
+      value: https://github.com/zvigrinberg/aop-aspects-and-interceptors.git
+    - name: revision
+      value: main
+    - name: submodules
+      value: "true"
+    - name: depth
+      value: "1"
+    - name: sslVerify
+      value: "true"
+    - name: deleteExisting
+      value: "true"
+    - name: verbose
+      value: "true"
+    - name: gitInitImage
+      value: registry.redhat.io/openshift-pipelines/pipelines-git-init-rhel8@sha256:158b0fda662e5bc05e2ff46f6864a8620bbb45e1a2388a456de43aad6e72d8f7
+    - name: userHome
+      value: /tekton/home
+    taskRef:
+      kind: ClusterTask
+      name: git-clone
+    workspaces:
+    - name: output
+      workspace: source-code
+  - name: maven
+    params:
+    - name: MAVEN_IMAGE
+      value: maven:3.6-jdk-14
+    - name: GOALS
+      value:
+      - package
+    - name: MAVEN_MIRROR_URL
+      value: ' http://artifactory-ha:8082/artifactory/maven-all'
+    - name: SERVER_USER
+      value: admin
+    - name: SERVER_PASSWORD
+      value: Redhat123#
+    - name: PROXY_PROTOCOL
+      value: http
+    - name: CONTEXT_DIR
+      value: spring-aop-example/
+    runAfter:
+    - git-clone
+    taskRef:
+      kind: ClusterTask
+      name: maven
+    workspaces:
+    - name: source
+      workspace: source-code
+    - name: maven-settings
+      workspace: source-code
+  - name: buildah
+    params:
+    - name: IMAGE
+      value: $(params.REPO_IMAGE):$(params.BUILD_NUMBER)
+    - name: BUILDER_IMAGE
+      value: quay.io/buildah/stable:v1.23.3
+    - name: STORAGE_DRIVER
+      value: overlay
+    - name: DOCKERFILE
+      value: spring-aop-example/Containerfile
+    - name: CONTEXT
+      value: spring-aop-example/
+    - name: TLSVERIFY
+      value: "false"
+    - name: FORMAT
+      value: oci
+    - name: SKIP_PUSH
+      value: "false"
+    runAfter:
+    - maven
+    taskRef:
+      kind: Task
+      name: buildah
+    workspaces:
+    - name: source
+      workspace: source-code
+    - name: dockerconfig
+      workspace: image-pull-secret
+  workspaces:
+  - name: source-code
+  - name: image-pull-secret
