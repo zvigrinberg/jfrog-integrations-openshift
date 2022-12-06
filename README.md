@@ -305,7 +305,7 @@ oc get route aop-aspects-and-interceptors -o=jsonpath="{..spec.host}" | xargs -i
 ```shell
 oc delete all -l app=aop-aspects-and-interceptors
 ```
-- We will create a pipeline, Using Openshift Pipelines(Tekton) , And will use Helm in it to deploy the sample application to Cluster.
+- We will create a pipeline, Using Openshift Pipelines(Tekton) , And will use oc CLI as final task in it to deploy the sample application to Cluster.
 
 - The pipeline will contain 4 tasks:
  1. `git` clone and checkout the application repo into workspace.
