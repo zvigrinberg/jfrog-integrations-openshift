@@ -62,6 +62,10 @@ export MASTER_KEY=$(openssl rand -hex 32)
 ```
 3. switch to namespace jfrog-integrations
 ```shell
+## If it doesn't exists, just create it
+oc new-project jfrog-integrations
+
+## In case it exists
 oc project jfrog-integrations
 ```
 4. Add securityContextConstraints `anyuid` and `hostmount` to default serviceAccount in namespace:
