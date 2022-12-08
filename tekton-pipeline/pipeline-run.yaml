@@ -1,16 +1,10 @@
 apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
-  annotations:
-    pipeline.openshift.io/started-by: zgrinber@redhat.com
-  creationTimestamp: "2022-12-05T11:53:18Z"
-  generation: 1
   labels:
     tekton.dev/pipeline: build-application-artifactory
   name: build-application-artifactory-x85lzv
   namespace: jfrog-integrations
-  resourceVersion: "1240782237"
-  uid: 8d1cc0b4-9b9e-45d4-80c9-e8a73363b01e
 spec:
   params:
   - name: BUILD_NUMBER
