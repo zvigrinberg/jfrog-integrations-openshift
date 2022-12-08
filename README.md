@@ -1,7 +1,7 @@
 # jfrog-integrations-openshift
 Validate Integrations of JFrog Artifactory with Openshift
 
-**Note: JFrog X-RAY is out of scope, as it requires PRO License of Artifactory for activating it (Even if you've got a trial license for 30 days for X-RAY)**
+**Note: JFrog X-RAY is not in the scope of the following procedure , as it requires PRO License of Artifactory for activating it (Even if you've got a trial license for 30 days for X-RAY)**
 ## Installing Jfrog-Artifactory HA using Operator in operatorHub At Openshift
 
 - Operator installed Successfully through openshift web Console  --> Operators --> OperatorHub --> Search for `Jfrog Artifactory Enterprise Operator`
