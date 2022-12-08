@@ -44,7 +44,7 @@ spec:
     waitForDatabase: true
 ```
 
-- Anyway the Deployment failed because unable to pull images, I got 503 http code(already 5 days without change) , as can be seen in following error from several pods:
+- Anyway the Deployment failed because unable to pull images, I got 503 http code(already 5 days without change) , as can be seen in the following error from several pods:
 ![img.png](pictures/ErrorDeployingFromOperator.png)
 
 
