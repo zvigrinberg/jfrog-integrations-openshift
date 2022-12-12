@@ -70,7 +70,7 @@ oc run postgres-db-postgresql-client --rm --tty -i --restart='Never' --namespace
 
 4. Validate that database was created:
 ```shell
-oc run postgres-db-postgresql-client2 --rm --tty -i --restart='Never' --namespace jfrog-int --image docker.io/bitnami/postgresql:15.1.0-debian-11-r0 --env="PGPASSWORD=$POSTGRES_PASSWORD"       --command -- psql --host postgres-db-postgresql -U postgres -d postgres -p 5432 -c "\l"
+oc run postgres-db-postgresql-client2 --rm --tty -i --restart='Never' --namespace jfrog-integrations --image docker.io/bitnami/postgresql:15.1.0-debian-11-r0 --env="PGPASSWORD=$POSTGRES_PASSWORD"       --command -- psql --host postgres-db-postgresql -U postgres -d postgres -p 5432 -c "\l"
     Name     |  Owner   | Encoding |   Collate   |    Ctype    | ICU Locale | Locale Provider |   Access privileges   
 -------------+----------+----------+-------------+-------------+------------+-----------------+-----------------------
  artifactory | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | 
