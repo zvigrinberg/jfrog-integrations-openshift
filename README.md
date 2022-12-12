@@ -18,13 +18,13 @@ spec:
       joinKey: 40f2948c3715621d41b17a995a92f9d2121a5c9b829b4ad09c9d1d611df7ae17
       masterKey: 40f2948c3715621d41b17a995a92f9d2121a5c9b829b4ad09c9d1d611df7ae17
       node:
-        replicaCount: 2
+        replicaCount: 1
         waitForPrimaryStartup:
           enabled: false
     databaseUpgradeReady: true
     database:
       driver: org.postgresql.Driver
-      password: 0lK9PfftNg
+      password: *********
       type: postgresql
       url: jdbc:postgresql://postgres-db-postgresql:5432/artifactory
       user: postgres
@@ -48,7 +48,44 @@ spec:
 - Anyway the Deployment failed because unable to pull images, I got 503 http code(already 5 days without change) , as can be seen in the following error from several pods:
 ![img.png](pictures/ErrorDeployingFromOperator.png)
 
+**Update: Upgrading Operator to new version 1.2.2(from 1.2.1) Solved the problem, and now the operator spins up artifactory instance successfully, but prior to applying Custom resource to cluster, you need to deploy a stand alone Postgresql instance to be configured inside the CR**
 
+1. Deploy Postgresql using bitnmai postgresql helm chart:
+```shell
+oc new-project jfrog-integrations
+oc adm policy add-scc-to-user anyuid -z default
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update bitnami
+helm install postgres-db bitnami/postgresql
+```
+2. Extract password for postgres user
+```shell
+export POSTGRES_PASSWORD=$(oc get secret --namespace jfrog-integrations postgres-db-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+```
+3. Create artifactory database in psql database instance:
+```shell
+oc run postgres-db-postgresql-client --rm --tty -i --restart='Never' --namespace jfrog-integrations --image docker.io/bitnami/postgresql:15.1.0-debian-11-r0 --env="PGPASSWORD=$POSTGRES_PASSWORD" \
+      --command -- psql --host postgres-db-postgresql -U postgres -d postgres -p 5432 -c "CREATE DATABASE artifactory;"
+```
+
+4. Validate that database was created:
+```shell
+oc run postgres-db-postgresql-client2 --rm --tty -i --restart='Never' --namespace jfrog-int --image docker.io/bitnami/postgresql:15.1.0-debian-11-r0 --env="PGPASSWORD=$POSTGRES_PASSWORD"       --command -- psql --host postgres-db-postgresql -U postgres -d postgres -p 5432 -c "\l"
+    Name     |  Owner   | Encoding |   Collate   |    Ctype    | ICU Locale | Locale Provider |   Access privileges   
+-------------+----------+----------+-------------+-------------+------------+-----------------+-----------------------
+ artifactory | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | 
+ postgres    | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | 
+ template0   | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | =c/postgres          +
+             |          |          |             |             |            |                 | postgres=CTc/postgres
+ template1   | postgres | UTF8     | en_US.UTF-8 | en_US.UTF-8 |            | libc            | =c/postgres          +
+             |          |          |             |             |            |                 | postgres=CTc/postgres
+(4 rows)
+```
+
+5. Now take the password of the current postgresql DB instance , and put it in the Custom Resource, and apply it to the cluster, The operator should 
+   Deploy artifactory within few minutes.
+   
+   
 ## Installing JFrog-artifactory using helm chart:
 
 Note: a License is Pre-requisite to the installation, as it needed for activating an instance on openshift, we'll use a free trial 30 days evaluation license
